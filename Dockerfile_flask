@@ -1,5 +1,5 @@
 FROM python:3.8
-WORKDIR /final_project
-COPY . /final_project
+WORKDIR /application
+COPY . /application
 RUN pip install -r requirements.txt
 CMD ["uwsgi", "uwsgi.ini"]

@@ -14,7 +14,7 @@ def send_mail(email, made_verification_token):
     create_link = f"""
     <html>
       <body>
-        <h1><a href='http://127.0.0.1:5000/verification?token={made_verification_token}'>Your verification link</a></h1>
+        <h1><a href='http://127.0.0.1:80/user/verify?token={made_verification_token}'>Your verification link</a></h1>
       </body>
     </html>
     """

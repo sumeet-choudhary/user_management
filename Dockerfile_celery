@@ -1,5 +1,5 @@
 FROM python:3.8
-WORKDIR /final_project
-COPY . /final_project
+WORKDIR /application
+COPY . /application
 RUN pip install -r requirements.txt
 ENTRYPOINT celery -A application.celery worker -B --loglevel=DEBUG -P solo
