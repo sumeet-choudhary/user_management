@@ -1,6 +1,6 @@
 from flask import make_response, jsonify
 from application import mongo
-from application.role.controller import get_role_by_id
+from application.role.controller import find_role_by_id
 
 
 """USER COLLECTION"""
@@ -8,23 +8,27 @@ from application.role.controller import get_role_by_id
 
 def find_user(email):
     try:
-        result = mongo.db.user_collection.find_one({"email": email, })
-        print("SCSCSCSCSCSC")
-        print(result)
+        result = mongo.db.user_collection.find_one({"email": email })
         if result:
-            print("inside if result")
+            print("result1 ---- ", result)
+
             role_id = result.get("role")
-            print("role id inside result")
-            print(role_id)
             if role_id:
-                print("insdire role id true")
-                role = get_role_by_id(role_id)
-                print("roleeee")
-                print(role)
-                role["_id"] = str(role["_id"])  # Converting into string
+                role = find_role_by_id(role_id)
+
+                if role:
+                    role["_id"] = str(role["_id"])  # Converting into string
+                else:
+                    role = {
+                        "role_name": "",
+                        "permissions": []
+                    }    
+                
                 result["role"] = role  # Replace the role ID with the role details
 
         return result
+        print("result2 ---- ", result)
+
     except Exception as e:
         return make_response(jsonify({"error": str(e)}))
 
