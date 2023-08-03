@@ -3,6 +3,7 @@ from flask_restful import Resource
 from application import api
 from datetime import datetime, timedelta
 import jwt
+import os
 from dotenv import load_dotenv
 import bcrypt
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
@@ -10,6 +11,8 @@ from application.user.controller import add_new_user, find_user, update_verifica
 from application.role.controller import find_role
 from application.celery_config.celery_task import send_mail
 from bson import ObjectId
+import traceback
+import uuid  # Universally Unique Identifier
 
 
 load_dotenv()
@@ -24,16 +27,21 @@ class UserRegister(Resource):
             email = request.json.get("email", None)
             company_name = request.json.get("company_name", None)
             admin_role_id = find_role("Admin")["_id"]
-            '''{
-    "_id" : ObjectId("64ca27b4340b824020140281"),
-
-}'''
             verified = False
-            all_values = {"name": name, "email": email, "role": admin_role_id, "company_name": company_name,
-                          "verified": verified}
 
             if name in [None, ""] or email in [None, ""] or company_name in [None, ""]:
-                return make_response(jsonify({"message": "Credentials Missing"}), 500)
+                return make_response(jsonify({"message": "Please provide all necessary information."}), 200)
+
+            company_code = str(uuid.uuid4())[:4]  # generating a random code of 4 and converting it to string for having a unique identity even if two or more company has same name
+            company_id = company_name.lower().replace(" ", "") + company_code  # making company_id more readable and efficient by using lower and replace
+
+            all_values = {"name": name,
+                          "email": email,
+                          "company_name": company_name,
+                          "role": admin_role_id,
+                          "company_id": company_id,
+                          "verified": verified
+                          }
 
             already_user = find_user(email)
             if already_user:
@@ -50,10 +58,9 @@ class UserRegister(Resource):
                     return make_response(jsonify({"message": "User registered successfully. A mail has been sent to "
                                                              "your email for verification."}), 200)
                 else:
-                    return make_response(jsonify({"message": "Error registering user"}), 500)
+                    return make_response(jsonify({"message": "Error registering user"}), 200)
 
         except Exception as e:
-
             return make_response(jsonify({"error": str(e)}, 500))
 
 
@@ -68,7 +75,7 @@ class UserVerify(Resource):
 
                 already_user = find_user(email)
                 if not already_user:
-                    return make_response(jsonify({"message": "User with provided email does not exist."}), 500)
+                    return make_response(jsonify({"message": "User with provided email does not exist."}), 200)
                 else:
                     update_verification(email)
                     return make_response(jsonify({"message": "Your account is now verified!"}), 200)
@@ -82,15 +89,17 @@ class UserSetPassword(Resource):
     def post(self):
         try:
             email = request.json.get("email", None)
-            password = request.json.get("password", None).encode()
-            hash_password = bcrypt.hashpw(password, bcrypt.gensalt(8))
+            password = request.json.get("password", None)
 
             if email in [None, ""] or password in [None, ""]:
-                return make_response(jsonify({"message": "Credentials Missing"}), 500)
+                return make_response(jsonify({"message": "Please provide all necessary information."}), 200)
+
+            password = password.encode()
+            hash_password = bcrypt.hashpw(password, bcrypt.gensalt(8))
 
             already_user = find_user(email)
             if not already_user:
-                return make_response(jsonify({"message": "User with provided email does not exist."}), 500)
+                return make_response(jsonify({"message": "User with provided email does not exist."}), 200)
 
             verified = already_user["verified"]
             if not verified:
@@ -108,21 +117,23 @@ class UserLogin(Resource):
     def post(self):
         try:
             email = request.json.get("email", None)
-            password = request.json.get("password", None).encode()
+            password = request.json.get("password", None)
 
             if email in [None, ""] or password in [None, ""]:
-                return make_response(jsonify({"message": "Credentials Missing"}), 500)
+                return make_response(jsonify({"message": "Please provide all necessary information."}), 200)
+
+            password = password.encode()
 
             already_user = find_user(email)
             if not already_user:
-                return make_response(jsonify({"message": "User with provided email does not exist."}), 500)
+                return make_response(jsonify({"message": "User with provided email does not exist."}), 200)
 
             verified = already_user["verified"]
             if not verified:
-                return make_response(jsonify({"message": "Please verify your email first"}), 500)
+                return make_response(jsonify({"message": "Please verify your email first"}), 200)
 
             if "password" not in already_user:
-                return make_response(jsonify({"message": "First set your password before trying to login"}), 500)
+                return make_response(jsonify({"message": "First set your password before trying to login"}), 200)
 
             if bcrypt.checkpw(password, already_user["password"]) is False:
                 return make_response(jsonify({"message": "Wrong Password"}))
@@ -135,12 +146,13 @@ class UserLogin(Resource):
                                           "user": {
                                                   "role": already_user["role"],
                                                   "company_name": already_user["company_name"],
+                                                  "company_id": already_user["company_id"],
                                                   "name": already_user["name"],
                                                   "email": already_user["email"]
                                                   }
                                           }), 200)
         except Exception as e:
-            return make_response(jsonify({'error': str(e)}))
+            return make_response(jsonify({'error': str(e)}), 500)
 
 
 class UserAdd(Resource):
@@ -153,41 +165,53 @@ class UserAdd(Resource):
             email = request.json.get("email", None)
             role_id = request.json.get("role", None)
             company_name = request.json.get("company_name", None)
+            company_id = request.json.get("company_id", None)
             verified = False
-            all_values = {
-                            "name": name,
-                            "email": email,
-                            "role": ObjectId(role_id),
-                            "company_name": company_name,
-                            "verified": verified
-                          }
 
-            if name in [None, ""] or email in [None, ""] or role_id in [None, ""] or company_name in [None, ""]:
-                return make_response(jsonify({"message": "Credentials Missing"}), 500)
+            all_values = {
+                "name": name,
+                "email": email,
+                "role": ObjectId(role_id),
+                "company_name": company_name,
+                "company_id": company_id,
+                "verified": verified
+            }
+
+            if name in [None, ""] or email in [None, ""] or role_id in [None, ""] or company_name in [None, ""] or company_id in [None, ""]:
+                return make_response(jsonify({"message": "Please provide all necessary information."}), 200)
 
             already_user_admin = find_user(admin_email)
             if not already_user_admin:
-                return make_response(jsonify({"message": "User with provided email does not exist."}), 500)
+                return make_response(jsonify({"message": "User with provided email does not exist."}), 200)
 
             if already_user_admin["role"]["name"] != "Admin":
-                return make_response(jsonify({"message": "Only Admin can add new users"}), 500)
+                return make_response(jsonify({"message": "Only Admin can add new users"}), 200)
 
             already_user = find_user(email)
             if already_user:
-                return make_response(jsonify({"message": "User with given email id already exist."}), 200)
+                return make_response(jsonify({"message": "User with provided email already exist."}), 200)
 
-            expire_token_time = datetime.now() + timedelta(minutes=15)
-            expire_epoch_time = int(expire_token_time.timestamp())
-            made_payload = {"email": email, "exp": expire_epoch_time}
-            made_verification_token = jwt.encode(made_payload, "sumeet", algorithm="HS256")
+            else:
+                expire_token_time = datetime.now() + timedelta(minutes=15)
+                expire_epoch_time = int(expire_token_time.timestamp())
+                made_payload = {"email": email, "exp": expire_epoch_time}
+                made_verification_token = jwt.encode(made_payload, "sumeet", algorithm="HS256")
 
-            if add_new_user(all_values):
-                send_mail.delay(email, made_verification_token)
-                return make_response(jsonify({"message": "New user has been added successfully. A mail has been sent "
-                                                         "to provided user email for verification."}), 200)
+                if add_new_user(all_values):
+                    send_mail.delay(email, made_verification_token)
+                    return make_response(jsonify({"message": "New user has been added successfully. A mail has been sent "
+                                                             "to provided user email for verification.",
+                                                 "user": {
+                                                            "role": already_user["role"],
+                                                            "company_name": already_user["company_name"],
+                                                            "company_id": already_user["company_id"],
+                                                            "name": already_user["name"],
+                                                            "email": already_user["email"]
+                                                         }
+                                                  }), 200)
 
         except Exception as e:
-            return make_response(jsonify({"error": str(e)}))
+            return make_response(jsonify({"error": str(e)}), 500)
 
 
 api.add_resource(UserRegister, "/user/register")
