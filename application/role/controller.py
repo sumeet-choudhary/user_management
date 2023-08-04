@@ -3,6 +3,7 @@ from application import mongo
 
 """" ROLE COLLECTIONS """
 
+
 def find_role_by_name(name):
     try:
         result = mongo.db.role_collection.find_one({"role_name": name})
@@ -35,6 +36,7 @@ def find_role_by_id(role_id):
     except Exception as e:
         return make_response(jsonify({"error": str(e)}))
 
+
 def delete_role(id):
     try:
         result = mongo.db.role_collection.delete_one({"_id": id})
@@ -42,8 +44,8 @@ def delete_role(id):
     except Exception as e:
         return make_response(jsonify({"error": str(e)}))
 
+
 def get_all_company_roles(company_id):
-    print("fdsf",company_id)
     try:
         result = mongo.db.role_collection.find({"$or": [{"company_id": company_id}, {"role_name": "Admin"}]}, {"_id": 0})
         return list(result)

@@ -3,7 +3,6 @@ from flask_restful import Resource
 from application import api
 from datetime import datetime, timedelta
 import jwt
-import os
 from dotenv import load_dotenv
 import bcrypt
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
@@ -11,9 +10,7 @@ from application.user.controller import add_new_user, find_user, update_verifica
 from application.role.controller import find_role_by_name
 from application.celery_config.celery_task import send_mail
 from bson import ObjectId
-import traceback
 import uuid  # Universally Unique Identifier
-
 
 load_dotenv()
 user_blueprint = Blueprint("user_blueprint", __name__)
@@ -21,6 +18,7 @@ user_blueprint = Blueprint("user_blueprint", __name__)
 
 class UserRegister(Resource):
     """This api takes user inputs and if meets all conditions then register that user"""
+
     def post(self):
         try:
             name = request.json.get("name", None)
@@ -47,16 +45,16 @@ class UserRegister(Resource):
             if already_user:
                 return make_response(jsonify({"message": "This user already exist"}), 200)
 
-            expire_token_time = datetime.now() + timedelta(minutes=60)
+            expire_token_time = datetime.now() + timedelta(minutes=15)
             expire_epoch_time = int(expire_token_time.timestamp())
             made_payload = {"email": email, "exp": expire_epoch_time}
-            made_verification_token = jwt.encode(made_payload, "sumeet", algorithm="HS256")  # jwt token to pass in verify mail
+            # jwt token to pass in verify mail
+            made_verification_token = jwt.encode(made_payload, "sumeet", algorithm="HS256")
 
             if add_new_user(all_values):
-                # send_mail.delay(email, made_verification_token)
-                print("token ---> ",made_verification_token)
+                send_mail.delay(email, made_verification_token)
                 return make_response(jsonify({"message": "User registered successfully. A mail has been sent to "
-                                                            "your email for verification."}), 200)
+                                                         "your email for verification."}), 200)
             else:
                 return make_response(jsonify({"message": "Error registering user"}), 200)
 
@@ -66,6 +64,7 @@ class UserRegister(Resource):
 
 class UserVerify(Resource):
     """This api is used to verify the user on their provided email"""
+
     def get(self):
         try:
             token = request.args.get("token")
@@ -86,6 +85,7 @@ class UserVerify(Resource):
 
 class UserSetPassword(Resource):
     """This api is used to set user password before logging in"""
+
     def post(self):
         try:
             email = request.json.get("email", None)
@@ -114,6 +114,7 @@ class UserSetPassword(Resource):
 
 class UserLogin(Resource):
     """This api is used to login the user with email and password"""
+
     def post(self):
         try:
             email = request.json.get("email", None)
@@ -138,19 +139,19 @@ class UserLogin(Resource):
             if bcrypt.checkpw(password, already_user["password"]) is False:
                 return make_response(jsonify({"message": "Wrong Password"}))
 
-            access_token = create_access_token(identity=email, expires_delta=timedelta(minutes=60))
+            access_token = create_access_token(identity=email, expires_delta=timedelta(minutes=15))
             refresh_token = create_refresh_token(identity=email, expires_delta=timedelta(days=1))
             return make_response(jsonify({"message": "You have login successfully!",
                                           "access_token": access_token,
                                           "refresh_token": refresh_token,
                                           "user": {
-                                                  "role": already_user["role"],
-                                                  "company_name": already_user["company_name"],
-                                                  "company_id": already_user["company_id"],
-                                                  "name": already_user["name"],
-                                                  "email": already_user["email"],
-                                                  "verified": already_user["verified"]
-                                                  }
+                                              "role": already_user["role"],
+                                              "company_name": already_user["company_name"],
+                                              "company_id": already_user["company_id"],
+                                              "name": already_user["name"],
+                                              "email": already_user["email"],
+                                              "verified": already_user["verified"]
+                                          }
                                           }), 200)
         except Exception as e:
             return make_response(jsonify({'error': str(e)}), 500)
@@ -158,6 +159,7 @@ class UserLogin(Resource):
 
 class UserAdd(Resource):
     """This api is used to add new users with specified role"""
+
     @jwt_required()
     def post(self):
         try:
@@ -170,7 +172,6 @@ class UserAdd(Resource):
             if name in [None, ""] or email in [None, ""] or role_id in [None, ""]:
                 return make_response(jsonify({"message": "Please provide all necessary information."}), 200)
 
-           
             already_user_admin = find_user(admin_email)
             if not already_user_admin:
                 return make_response(jsonify({"message": "User with provided email does not exist."}), 200)
@@ -191,19 +192,19 @@ class UserAdd(Resource):
                 "verified": verified
             }
 
-            expire_token_time = datetime.now() + timedelta(minutes=60)
+            expire_token_time = datetime.now() + timedelta(minutes=15)
             expire_epoch_time = int(expire_token_time.timestamp())
             made_payload = {"email": email, "exp": expire_epoch_time}
             made_verification_token = jwt.encode(made_payload, "sumeet", algorithm="HS256")
 
             if add_new_user(all_values):
-                # send_mail.delay(email, made_verification_token)
-                print("token->",made_verification_token)
+                send_mail.delay(email, made_verification_token)
                 return make_response(jsonify({"message": "New user has been added successfully. A mail has been sent "
-                                                            "to provided user email for verification."}), 200)
+                                                         "to provided user email for verification."}), 200)
 
         except Exception as e:
             return make_response(jsonify({"error": str(e)}), 500)
+
 
 api.add_resource(UserRegister, "/user/register")
 api.add_resource(UserVerify, "/user/verify")

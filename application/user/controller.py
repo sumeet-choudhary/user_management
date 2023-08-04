@@ -8,10 +8,8 @@ from application.role.controller import find_role_by_id
 
 def find_user(email):
     try:
-        result = mongo.db.user_collection.find_one({"email": email })
+        result = mongo.db.user_collection.find_one({"email": email})
         if result:
-            print("result1 ---- ", result)
-
             role_id = result.get("role")
             if role_id:
                 role = find_role_by_id(role_id)
@@ -27,8 +25,6 @@ def find_user(email):
                 result["role"] = role  # Replace the role ID with the role details
 
         return result
-        print("result2 ---- ", result)
-
     except Exception as e:
         return make_response(jsonify({"error": str(e)}))
 
